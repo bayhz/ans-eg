@@ -1,0 +1,137 @@
+---
+# deploy-pxeserver.yml
+- hosts: all
+  gather_facts: yes
+  become: yes
+  become_method: su
+  vars:
+      ip: "{{ ansible_facts.all_ipv4_addresses.1 }}"
+  tasks:
+  - name: INSTALL nfs,tftp,dhcp服务
+    yum:
+        name: nfs-utils,tftp-server,dhcp
+        state: present
+        enablerepo: 'c7-media'
+        disablerepo: 'base,extras,updates'
+  - name: CONFIG nfs option
+    lineinfile:
+        backup: no
+        create: yes
+        path: /etc/exports
+        state: present
+        # 注意pxe server ip包含在此网络中
+        line: '{{ item.nfs_export }}'
+    loop:
+        - { nfs_export: '/media/CentOS 192.168.0.0/16(ro)' }
+        - { nfs_export: '/var/lib/tftpboot 192.168.0.0/16(rw)' }
+    tags: nfs
+    notify:
+      - RESTART nfs service
+
+  - name: CONFIG tftp option
+    command:
+        argv:
+        - /usr/bin/cp
+        - '-fr'
+        - '{{ item.sf }}'
+        - /var/lib/tftpboot/
+        creates: '{{ item.df }}'
+    loop: 
+        - { sf: /media/CentOS/EFI, df: /var/lib/tftpboot/EFI }
+        - { sf: /media/CentOS/images, df: /var/lib/tftpboot/images }
+    tags: tftp
+
+#  - name: CONFIG tftp option
+#    command:
+#        argv:
+#        - /usr/bin/cp
+#        - '{{ item.sf }}'
+#        - /var/lib/tftpboot/
+#        creates: '{{ item.df }}'
+#    loop: 
+#        - { sf: /media/CentOS/EFI/BOOT/grubaa64.efi, df: /var/lib/tftpboot/grubaa64.efi }
+#        - { sf: /media/CentOS/EFI/BOOT/grub.cfg, df: /var/lib/tftpboot/grub.cfg }
+#        - { sf: /media/CentOS/images/pxeboot/vmlinuz, df: /var/lib/tftpboot/vmlinuz }
+#        - { sf: /media/CentOS/images/pxeboot/initrd.img, df: /var/lib/tftpboot/initrd.img }
+
+#  - name: CONFIG tftp option-1
+#    command:
+#        argv:
+#        - /usr/bin/cp
+#        - /media/CentOS/EFI/BOOT/grubaa64.efi
+#        - /var/lib/tftpboot/
+#        creates: /var/lib/tftpboot/grubaa64.efi
+#  - name: CONFIG tftp option-2
+#    command:
+#        argv:
+#        - /usr/bin/cp
+#        - /media/CentOS/EFI/BOOT/grub.cfg
+#        - /var/lib/tftpboot/
+#        creates: /var/lib/tftpboot/grub.cfg
+#  - name: CONFIG tftp option-3
+#    command:
+#        argv:
+#        - /usr/bin/cp
+#        - /media/CentOS/images/pxeboot/vmlinuz
+#        - /var/lib/tftpboot/
+#        creates: /var/lib/tftpboot/vmlinuz
+#  - name: CONFIG tftp option-4
+#    command:
+#        argv:
+#        - /usr/bin/cp
+#        - /media/CentOS/images/pxeboot/initrd.img
+#        - /var/lib/tftpboot/
+#        creates: /var/lib/tftpboot/initrd.img
+  - name: CONFIG uefi boot option while installing os
+    replace:
+        backup: yes
+        path: /var/lib/tftpboot/EFI/BOOT/grub.cfg
+        regexp: '{{ item.mat }}'
+        replace: '{{ item.rep }}'
+    loop:
+        - { mat: '[ ]+inst\.(stage2|ks)=[^ ]+[ ]+', rep: ' inst.ks=nfs:{{ ip }}:/var/lib/tftpboot/kickstart/ks.cfg ' }
+        - { mat: '^set default="\d+"$', rep: 'set default="0"' }
+        - { mat: '^set timeout=\d+$', rep: 'set timeout=6' }
+    tags: grub
+
+  - name: CONFIG dhcp server
+    blockinfile:
+        path: /etc/dhcp/dhcpd.conf
+        # 注意dhcp server ip和地址范围
+        block: |
+            default-lease-time 600;
+            max-lease-time 7200;
+            subnet 192.168.0.0 netmask 255.255.0.0 { 
+                range dynamic-bootp 192.168.111.51 192.168.111.254;
+                filename "grubaa64.efi";
+                next-server {{ ip }};
+            }
+    notify:
+      - RESTART dhcp service
+    tags: dhcp
+
+  - name: START nfs,tftp,dhcp server
+    systemd:
+        name: '{{ item.service_name }}'
+        state: started
+        enabled: no
+    loop:
+        - { service_name: nfs }
+        - { service_name: tftp.socket }
+        - { service_name: dhcpd }
+
+  - name: show ip
+    debug: msg={{ ip }}
+
+  handlers:
+  - name: RESTART nfs service
+    systemd:
+        name: nfs
+        daemon_reload: yes
+        state: restarted
+  - name: RESTART dhcp service
+    systemd:
+        name: dhcpd
+        daemon_reload: yes
+        state: restarted
+...
