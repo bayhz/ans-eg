@@ -1,11 +1,18 @@
 ---
 # deploy-pxeserver.yml
-- hosts: all
+- hosts: localhost
+  transport: local
+  host_key_checking: False
   gather_facts: yes
   become: yes
   become_method: su
   vars:
+      # pxe主机地址
       ip: "{{ ansible_facts.all_ipv4_addresses.1 }}"
+      # 安装源目录
+      install_resource_path: "/media/CentOS"
+      # TFTP服务目录
+      tftpd_root_path: "/var/lib/tftpboot"
   tasks:
   - name: INSTALL nfs,tftp,dhcp服务
     yum:
@@ -22,8 +29,8 @@
         # 注意pxe server ip包含在此网络中
         line: '{{ item.nfs_export }}'
     loop:
-        - { nfs_export: '/media/CentOS 192.168.0.0/16(ro)' }
-        - { nfs_export: '/var/lib/tftpboot 192.168.0.0/16(rw)' }
+        - { nfs_export: "{{ install_resource_path }} 192.168.0.0/16(ro)" }
+        - { nfs_export: "{{ tftp_root_path }} 192.168.0.0/16(rw)" }
     tags: nfs
     notify:
       - RESTART nfs service
@@ -34,11 +41,11 @@
         - /usr/bin/cp
         - '-fr'
         - '{{ item.sf }}'
-        - /var/lib/tftpboot/
+        - {{ tftp_root_path }}/
         creates: '{{ item.df }}'
     loop: 
-        - { sf: /media/CentOS/EFI, df: /var/lib/tftpboot/EFI }
-        - { sf: /media/CentOS/images, df: /var/lib/tftpboot/images }
+        - { sf: {{ install_resource_path }}/EFI, df: {{ tftp_root_path }}/EFI }
+        - { sf: {{ install_resource_path }}/images, df: {{ tftp_root_path }}/images }
     tags: tftp
 
 #  - name: CONFIG tftp option
@@ -46,50 +53,50 @@
 #        argv:
 #        - /usr/bin/cp
 #        - '{{ item.sf }}'
-#        - /var/lib/tftpboot/
+#        - {{ tftp_root_path }}/
 #        creates: '{{ item.df }}'
 #    loop: 
-#        - { sf: /media/CentOS/EFI/BOOT/grubaa64.efi, df: /var/lib/tftpboot/grubaa64.efi }
-#        - { sf: /media/CentOS/EFI/BOOT/grub.cfg, df: /var/lib/tftpboot/grub.cfg }
-#        - { sf: /media/CentOS/images/pxeboot/vmlinuz, df: /var/lib/tftpboot/vmlinuz }
-#        - { sf: /media/CentOS/images/pxeboot/initrd.img, df: /var/lib/tftpboot/initrd.img }
+#        - { sf: {{ install_resource_path }}/EFI/BOOT/grubaa64.efi, df: {{ tftp_root_path }}/grubaa64.efi }
+#        - { sf: {{ install_resource_path }}/EFI/BOOT/grub.cfg, df: {{ tftp_root_path }}/grub.cfg }
+#        - { sf: {{ install_resource_path }}/images/pxeboot/vmlinuz, df: {{ tftp_root_path }}/vmlinuz }
+#        - { sf: {{ install_resource_path }}/images/pxeboot/initrd.img, df: {{ tftp_root_path }}/initrd.img }
 
 #  - name: CONFIG tftp option-1
 #    command:
 #        argv:
 #        - /usr/bin/cp
-#        - /media/CentOS/EFI/BOOT/grubaa64.efi
-#        - /var/lib/tftpboot/
-#        creates: /var/lib/tftpboot/grubaa64.efi
+#        - {{ install_resource_path }}/EFI/BOOT/grubaa64.efi
+#        - {{ tftp_root_path }}/
+#        creates: {{ tftp_root_path }}/grubaa64.efi
 #  - name: CONFIG tftp option-2
 #    command:
 #        argv:
 #        - /usr/bin/cp
-#        - /media/CentOS/EFI/BOOT/grub.cfg
-#        - /var/lib/tftpboot/
-#        creates: /var/lib/tftpboot/grub.cfg
+#        - {{ install_resource_path }}/EFI/BOOT/grub.cfg
+#        - {{ tftp_root_path }}/
+#        creates: {{ tftp_root_path }}/grub.cfg
 #  - name: CONFIG tftp option-3
 #    command:
 #        argv:
 #        - /usr/bin/cp
-#        - /media/CentOS/images/pxeboot/vmlinuz
-#        - /var/lib/tftpboot/
-#        creates: /var/lib/tftpboot/vmlinuz
+#        - {{ install_resource_path }}/images/pxeboot/vmlinuz
+#        - {{ tftp_root_path }}/
+#        creates: {{ tftp_root_path }}/vmlinuz
 #  - name: CONFIG tftp option-4
 #    command:
 #        argv:
 #        - /usr/bin/cp
-#        - /media/CentOS/images/pxeboot/initrd.img
-#        - /var/lib/tftpboot/
-#        creates: /var/lib/tftpboot/initrd.img
+#        - {{ install_resource_path }}/images/pxeboot/initrd.img
+#        - {{ tftp_root_path }}/
+#        creates: {{ tftp_root_path }}/initrd.img
   - name: CONFIG uefi boot option while installing os
     replace:
         backup: yes
-        path: /var/lib/tftpboot/EFI/BOOT/grub.cfg
+        path: {{ tftp_root_path }}/EFI/BOOT/grub.cfg
         regexp: '{{ item.mat }}'
         replace: '{{ item.rep }}'
     loop:
-        - { mat: '[ ]+inst\.(stage2|ks)=[^ ]+[ ]+', rep: ' inst.ks=nfs:{{ ip }}:/var/lib/tftpboot/kickstart/ks.cfg ' }
+        - { mat: '[ ]+inst\.(stage2|ks)=[^ ]+[ ]+', rep: ' inst.ks=nfs:{{ ip }}:{{ tftp_root_path }}/kickstart/ks.cfg ' }
         - { mat: '^set default="\d+"$', rep: 'set default="0"' }
         - { mat: '^set timeout=\d+$', rep: 'set timeout=6' }
     tags: grub
