@@ -1,0 +1,44 @@
+---
+# roles/ks/tasks/bootOption.yml
+#
+# CentOS安装启动菜单中内核参数可参考这里进行设置:
+# https://docs.centos.org/en-US/centos/install-guide/adminoptions/#chap-anaconda-boot-options
+#
+# 可能会用到的参数:
+# 安装源:
+#     inst.repo=cdrom
+#     inst.repo=cdrom:device
+#     inst.repo=hd:device:/path
+#     inst.repo=hmc
+#     inst.repo=http://host/path
+#     inst.repo=https://host/path
+#     inst.repo=ftp://username:password@host/path
+#     inst.repo=nfs:[options:]server:/path
+# modprobe.blacklist=ahci,firewire_ohci(阻止载入的驱动列表,安装完成后的系统也会保持这个设置,/etc/modprobe.d/anaconda-blacklist.conf)
+# bond=bond0:em1,em2:mode=active-backup,tx_queues=32,downdelay=5000
+# inst.dd=dd.rpm(升级驱动,可多次设置,不带参数值则会提示,比如不带参数提示,设置多个你可以选择从哪里升级)
+#     https://docs.centos.org/en-US/centos/install-guide/DU-Updating_drivers_during_installation_x86/
+# inst.ks(如果不设置此选项则载入标签为OEMDRV设备中/ks.cfg文件;
+#     如果不指定此选项的参数值,则采用以nfs方式,dhcp服务的ip地址,dhcp服务filename选项指定的文件
+#         或者路径/kickstart/<dhcpclient-ip>-kickstart的ks文件;
+#     如果参数值以/结尾,则载入该位置下的<dhcpclient-ip>-kickstart的ks文件
+# inst.stage2=host1/install.img(如果找不到会载入LiveOS/squashfs.img)
+# inst.sshd
+# inst.text | inst.cmdline | inst.graphical(默认的,如果载入图形界面失败尝试下inst.xdriver=vesa)
+#     https://docs.centos.org/en-US/centos/install-guide/Text_Installation_Intro-x86/
+# inst.resolution=800x600(最低)
+# inst.headless(阻止输出)
+# inst.gpt(UEFI模式下没有意义)
+# selinux=0(将禁止在安装以及安装完毕后的SELinux)
+# inst.nosave=input_ks,output_ks,all_ks,logs,all(依次为阻止输入,输出,所有ks,安装日志,所有ks和安装日志)
+# inst.vnc(以VNC方式安装则默认启动text模式安装)
+# inst.vncpassword=testpwd(必须6-8个字符)
+# inst.vncconnect=host:port(默认5900)
+# bootdev=eth0(使用多个ip时必须设置)
+# Installation source 	Option format
+
+- name: Create the file to initialize the mongod Shard
+  template: src=shard_init.j2 dest=/tmp/shard_init_{{ inventory_hostname }}.js
+  delegate_to: '{{ item }}'
+  with_items: groups.mongos_servers
+
