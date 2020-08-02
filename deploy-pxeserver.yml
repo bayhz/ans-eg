@@ -1,4 +1,6 @@
 ---
+# 关于通过网络安装CentOS的详细配置参考文档:
+# https://docs.centos.org/en-US/centos/install-guide/pxe-server/#sect-network-boot-setup-uefi
 # deploy-pxeserver.yml
 - hosts: localhost
   transport: local
@@ -13,6 +15,10 @@
       install_resource_path: "/media/CentOS"
       # TFTP服务目录
       tftpd_root_path: "/var/lib/tftpboot"
+      # ks文件路径,以TFTP为根
+      ksfile_pathname: "/kickstart/ks.cfg"
+      # grub.cfg文件路径,以TFTP为根
+      grub_cfg_file_pathname: "/EFI/BOOT/grub.cfg"
   tasks:
   - name: INSTALL nfs,tftp,dhcp服务
     yum:
@@ -61,42 +67,14 @@
 #        - { sf: {{ install_resource_path }}/images/pxeboot/vmlinuz, df: {{ tftp_root_path }}/vmlinuz }
 #        - { sf: {{ install_resource_path }}/images/pxeboot/initrd.img, df: {{ tftp_root_path }}/initrd.img }
 
-#  - name: CONFIG tftp option-1
-#    command:
-#        argv:
-#        - /usr/bin/cp
-#        - {{ install_resource_path }}/EFI/BOOT/grubaa64.efi
-#        - {{ tftp_root_path }}/
-#        creates: {{ tftp_root_path }}/grubaa64.efi
-#  - name: CONFIG tftp option-2
-#    command:
-#        argv:
-#        - /usr/bin/cp
-#        - {{ install_resource_path }}/EFI/BOOT/grub.cfg
-#        - {{ tftp_root_path }}/
-#        creates: {{ tftp_root_path }}/grub.cfg
-#  - name: CONFIG tftp option-3
-#    command:
-#        argv:
-#        - /usr/bin/cp
-#        - {{ install_resource_path }}/images/pxeboot/vmlinuz
-#        - {{ tftp_root_path }}/
-#        creates: {{ tftp_root_path }}/vmlinuz
-#  - name: CONFIG tftp option-4
-#    command:
-#        argv:
-#        - /usr/bin/cp
-#        - {{ install_resource_path }}/images/pxeboot/initrd.img
-#        - {{ tftp_root_path }}/
-#        creates: {{ tftp_root_path }}/initrd.img
   - name: CONFIG uefi boot option while installing os
     replace:
-        backup: yes
-        path: {{ tftp_root_path }}/EFI/BOOT/grub.cfg
+        backup: no
+        path: {{ tftp_root_path }}/{{ grub_cfg_file_pathname }}
         regexp: '{{ item.mat }}'
         replace: '{{ item.rep }}'
     loop:
-        - { mat: '[ ]+inst\.(stage2|ks)=[^ ]+[ ]+', rep: ' inst.ks=nfs:{{ ip }}:{{ tftp_root_path }}/kickstart/ks.cfg ' }
+        - { mat: '[ ]+inst\.(stage2|ks)=[^ ]+[ ]+', rep: ' inst.ks=nfs:{{ ip }}:{{ tftp_root_path }}/{{ ksfile_pathname }} ' }
         - { mat: '^set default="\d+"$', rep: 'set default="0"' }
         - { mat: '^set timeout=\d+$', rep: 'set timeout=6' }
     tags: grub
@@ -108,8 +86,10 @@
         block: |
             default-lease-time 600;
             max-lease-time 7200;
-            subnet 192.168.0.0 netmask 255.255.0.0 { 
-                range dynamic-bootp 192.168.111.51 192.168.111.254;
+            # 21掩码8C地址128-135
+            subnet 192.168.128.0 netmask 255.255.248.0 { 
+                range dynamic-bootp 192.168.129.0 192.168.130.255;
+                # 以TFTP为根
                 filename "grubaa64.efi";
                 next-server {{ ip }};
             }
