@@ -39,9 +39,8 @@ pki --issue --cacert caCert.pem \
 --outform pem > x509/svrCert.pem
 ```
 
-> [!INFO]
+> [!IMPORTANT]
 > 有些vpn客户端要求vpn服务器证书要包含TLS服务器授权Extended Key Usage (EKU) flag
->
 > ```
 > --flag serverAuth
 > ```
