@@ -39,7 +39,8 @@ pki --issue --cacert caCert.pem \
 --outform pem > x509/svrCert.pem
 ```
 
-> [!INFO] 有些vpn客户端要求vpn服务器证书要包含TLS服务器授权Extended Key Usage (EKU) flag
+> [!INFO]
+> 有些vpn客户端要求vpn服务器证书要包含TLS服务器授权Extended Key Usage (EKU) flag
 >
 > ```
 > --flag serverAuth
@@ -99,9 +100,10 @@ pools {
 swanctl --load-all
 ```
 
-> [!NOTE] 客户端连接前执行这个命令可即时查看日志
+> [!TIP]
+> 客户端连接前执行这个命令可即时查看日志
 > ```
-> swanctl --load-all
+> swanctl --log
 > ```
 
 ### iOS、iPad以EAP认证方式连接
